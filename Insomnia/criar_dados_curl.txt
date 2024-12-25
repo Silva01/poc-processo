@@ -1,0 +1,7 @@
+curl --request POST \
+  --url http://localhost:8080/api/create/data \
+  --header 'Content-Type: application/json' \
+  --header 'User-Agent: insomnia/10.3.0' \
+  --data '{
+	"qtd": 50000
+}'

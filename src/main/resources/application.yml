@@ -1,0 +1,9 @@
+spring.application.name: lab-virtual-threads
+spring:
+  cache:
+    type: simple
+    caffeine:
+      spec: maximumSize=60000,expireAfterWrite=5m
+  data:
+    mongodb:
+      uri: mongodb://admin:admin123@localhost:27017/lab-virtual-threads?authSource=admin
