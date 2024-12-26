@@ -7,9 +7,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.dto.GroupedProcess;
+import silva.daniel.project.study.streams.lambda.lab.virtual.threads.entity.Data;
+import silva.daniel.project.study.streams.lambda.lab.virtual.threads.entity.FileResult;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.entity.History;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.entity.Process;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.entity.ProcessList;
+import silva.daniel.project.study.streams.lambda.lab.virtual.threads.repository.FileDataRepository;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.repository.HistoryRepository;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.repository.ProcessListRepository;
 import silva.daniel.project.study.streams.lambda.lab.virtual.threads.repository.ProcessRepository;
@@ -36,14 +39,16 @@ public class ProcessService {
     private final ProcessListRepository processListRepository;
     private final ProcessRepository processRepository;
     private final HistoryRepository historyRepository;
+    private final FileDataRepository fileDataRepository;
     private final ProcessRepositoryService processRepositoryService;
 
     private Logger log = LoggerFactory.getLogger(ProcessService.class);
 
-    public ProcessService(ProcessListRepository processListRepository, ProcessRepository processRepository, HistoryRepository historyRepository, ProcessRepositoryService processRepositoryService) {
+    public ProcessService(ProcessListRepository processListRepository, ProcessRepository processRepository, HistoryRepository historyRepository, FileDataRepository fileDataRepository, ProcessRepositoryService processRepositoryService) {
         this.processListRepository = processListRepository;
         this.processRepository = processRepository;
         this.historyRepository = historyRepository;
+        this.fileDataRepository = fileDataRepository;
         this.processRepositoryService = processRepositoryService;
     }
 
@@ -51,6 +56,7 @@ public class ProcessService {
         log.info("Generating process...");
         final var faker = new Faker();
         final var processes = new ArrayList<Process>();
+        final var molde = new ArrayList<Data>();
 
         final var processList = new ProcessList();
         processList.setListName(faker.name().fullName());
@@ -69,8 +75,23 @@ public class ProcessService {
             process.setValid(faker.bool().bool());
             process.setHistory(historySave);
 
-            processes.add(processRepository.save(process));
+            final var newProcess = processRepository.save(process);
+
+            processes.add(newProcess);
+
+            final var data = new Data();
+            data.setProcessId(newProcess.getId());
+            data.setIsvalid(newProcess.isValid());
+            data.setHistoryId(newProcess.getHistory().getId());
+
+            molde.add(data);
         }
+
+        final var fileData = new FileResult();
+        fileData.setListId(processList.getId());
+        fileData.setData(molde);
+
+        fileDataRepository.save(fileData);
     }
 
     public void generateCsvData() throws IOException {
@@ -103,61 +124,28 @@ public class ProcessService {
         log.info("Arquivo CSV salvo em: {}", outputPath.toAbsolutePath());
     }
 
-//    public void generateCsvVirtualData() {
-//        try {
-//            StringWriter writer = new StringWriter();
-//            writer.write("id,is_valid,history_id\n");
-//            log.info("Generating CSV virtual data...");
-//            final var virtualThread = Executors.newVirtualThreadPerTaskExecutor();
-//            AtomicInteger count = new AtomicInteger();
-//            final List<Callable<String>> invokers = new ArrayList<>();
-//            processListRepository.findAll().forEach(processList -> {
-//
-//                log.info("Creating virtual process...");
-//                invokers.add(() -> {
-//                    Optional<History> history = historyRepository.findByProcessList_Id(processList.getId());
-//
-//                    if (history.isEmpty()) {
-//                        return "";
-//                    }
-//
-//                    List<Process> processes = processRepository.findAllByHistory_Id(history.get().getId());
-//                    processes.forEach(p -> writer.write(p.getId() + "," + p.isValid() + "," + p.getHistory().getId() + "\n"));
-//
-//                    return "ID %d".formatted(count.incrementAndGet());
-//                });
-//
-//                log.info("Starting virtual thread...");
-//            });
-//
-//            var results = virtualThread.invokeAll(invokers);
-//
-//            for (var future : results) {
-//                log.info("Finalizado thread {}", future.get());
-//            }
-//
-//            log.info("Waiting for virtual thread to finish... {}", virtualThread.isTerminated());
-//            virtualThread.shutdown();
-//
-//            log.info("Gerando ToString dos dados");
-//            String csvData = writer.toString();
-//            writer.close();
-//
-//            // Mostrar no console
-//            log.info("CSV Gerado:");
-//
-//            // Escrever o CSV em um arquivo
-//            Path outputPath = Path.of("tmp/%s.csv".formatted(UUID.randomUUID().toString()));
-//            Files.writeString(outputPath, csvData, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-//
-//            log.info("Arquivo CSV salvo em: {}", outputPath.toAbsolutePath());
-//        } catch (InterruptedException | IOException e) {
-//            log.error("Error generating virtual data: {}", e.getMessage());
-//        } catch (ExecutionException e) {
-//            log.error("Error generating virtual data: {}", e.getMessage());
-//            throw new RuntimeException(e);
-//        }
-//    }
+    public void generateCsvDataWithTemplate() throws IOException {
+        StringWriter writer = new StringWriter();
+        writer.write("id,is_valid,history_id\n");
+        log.info("Generating CSV data...");
+        processListRepository.findAll().forEach(processList -> fileDataRepository.findAllByListId(processList.getId()).parallelStream().forEach(fileResult -> fileResult.getData().forEach(data -> {
+            writer.write(data.getProcessId() + "," + data.isIsvalid() + "," + data.getHistoryId() + "\n");
+        })));
+
+        log.info("Gerando ToString dos dados");
+        String csvData = writer.toString();
+        writer.close();
+
+        // Mostrar no console
+        log.info("CSV Gerado:");
+
+        // Escrever o CSV em um arquivo
+        Path outputPath = Path.of("tmp/%s.csv".formatted(UUID.randomUUID().toString()));
+        Files.writeString(outputPath, csvData, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+        log.info("Arquivo CSV salvo em: {}", outputPath.toAbsolutePath());
+    }
+
 
     public void generateCsvVirtualData() {
         try {

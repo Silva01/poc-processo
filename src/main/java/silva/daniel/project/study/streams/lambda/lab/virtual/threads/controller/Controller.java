@@ -31,6 +31,11 @@ public class Controller {
         service.generateCsvData();
     }
 
+    @GetMapping("generate/csv/data/template")
+    public void generateCsvDataTemplate() throws IOException {
+        service.generateCsvDataWithTemplate();
+    }
+
     @GetMapping("generate/csv/virtual/data")
     public void generateCsvVirtualData() throws IOException {
         service.generateCsvVirtualData();
